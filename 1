@@ -1,0 +1,26 @@
+# Initialize an empty 7x3 numpy array for joint positions and an identity matrix for T0e
+        jointPositions = np.zeros((7, 3))
+        T0e = np.eye(4)
+        
+        # Iterate through all 7 joints to compute transformations and positions
+        for i in range(7):
+            # Extract current DH parameters and joint angle
+            a, alpha, d = self.dh_params[i]
+            theta = q[i]
+            
+            # 1. Compute DH transformation matrix for current joint
+            T_i = self.build_dh_transform(a, alpha, d, theta)
+            
+            # 2. Update global transformation matrix (multiply from the right)
+            T0e = np.matmul(T0e, T_i)
+            
+            # 3. Calculate actual physical joint center position using the provided offset
+            # Convert offset to homogeneous coordinates [x, y, z, 1]
+            offset_x, offset_y, offset_z = self.joint_offsets[i]
+            offset_homo = np.array([offset_x, offset_y, offset_z, 1.0])
+            
+            # Transform the local offset to world frame
+            pos_world = np.matmul(T0e, offset_homo)
+            
+            # 4. Save the [x, y, z] coordinates to the output matrix
+            jointPositions[i, :] = pos_world[0:3]
