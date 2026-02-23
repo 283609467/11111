@@ -1,0 +1,20 @@
+# Translation error
+        translate_vec = target[0:3, 3] - current[0:3, 3]
+        
+        # Rotation error based on Axis-Angle representation
+        R_target = target[0:3, 0:3]
+        R_curr = current[0:3, 0:3]
+        R_err = np.matmul(R_target, R_curr.T)
+        
+        # Calculate the angle of rotation, clipping to avoid math domain errors
+        angle = np.arccos(np.clip((np.trace(R_err) - 1.0) / 2.0, -1.0, 1.0))
+        
+        # Handle singularity when the angle is exactly 0
+        if np.isclose(angle, 0.0):
+            rotate_vec = np.zeros(3)
+        else:
+            rx = R_err[2, 1] - R_err[1, 2]
+            ry = R_err[0, 2] - R_err[2, 0]
+            rz = R_err[1, 0] - R_err[0, 1]
+            r = np.array([rx, ry, rz])
+            rotate_vec = (angle / (2.0 * np.sin(angle))) * r
