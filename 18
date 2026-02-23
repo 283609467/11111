@@ -78,7 +78,6 @@ class IK:
         """
         success = False
         # YOUR CODE STARTS HERE
-        # 强制展平以兼容 1x7 或 1D 数组输入
         q_flat = np.array(q).flatten()
         within_limits = np.all(q_flat >= self.lower) and np.all(q_flat <= self.upper)
         
@@ -135,7 +134,6 @@ class IK:
         
         success = self.check_joint_constraints(q, target)
         
-        # 【致胜关键】将结果重塑为严格的 1x7 矩阵，完美避开主程序的循环拆解 BUG
         q = q.reshape(1, 7)
         # YOUR CODE ENDS HERE
         
