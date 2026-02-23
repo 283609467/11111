@@ -1,0 +1,19 @@
+        max_iterations = 5000
+        tolerance = 1e-3
+        q = np.copy(initial_guess)
+        
+        for i in range(max_iterations):
+            # 1. Get desired joint velocity from Jacobian Transpose
+            dq = self.solve_ik(q, target)
+            
+            # 2. Check terminating condition: if update is extremely small, we converged
+            if np.linalg.norm(dq) < tolerance:
+                break
+                
+            # 3. Update current joint configuration
+            q = q + dq
+            
+            # 4. Enforce joint limits strictly at each step
+            q = np.clip(q, self.lower, self.upper)
+            
+        success = self.check_joint_constraints(q, target)
