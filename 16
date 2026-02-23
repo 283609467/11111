@@ -1,0 +1,154 @@
+Python
+#!/usr/bin/env python
+import os
+import sys
+import numpy as np
+from solution.solveFK import FK
+
+class IK:
+
+    # JOINT LIMITS
+    lower = np.array([-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973])
+    upper = np.array([2.8973,1.7628,2.8973,-0.0698,2.8973,3.7525,2.8973])
+
+    fk = FK()
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def calcJacobian(q):
+        """
+        Calculate the Jacobian of the end effector in a given configuration.
+        INPUT:
+        q - 1 x 7 vector of joint angles [q0, q1, q2, q3, q4, q5, q6]
+        OUTPUT:
+        J - the Jacobian matrix 
+        """
+
+        J = []       
+        # YOUR CODE STARTS HERE
+        J = np.zeros((6, 7))
+        T = np.eye(4)
+        z_axes = []
+        positions = []
+        
+        for i in range(7):
+            z_axes.append(T[0:3, 2])
+            positions.append(T[0:3, 3])
+            a, alpha, d = IK.fk.dh_params[i]
+            T_i = IK.fk.build_dh_transform(a, alpha, d, q[i])
+            T = np.matmul(T, T_i)
+            
+        T_ee = np.matmul(T, IK.fk.build_dh_transform(0, 0, 0, -np.pi/4))
+        p_ee = T_ee[0:3, 3]
+        
+        for i in range(7):
+            z = z_axes[i]
+            p = positions[i]
+            J[0:3, i] = np.cross(z, p_ee - p)
+            J[3:6, i] = z
+        # YOUR CODE ENDS HERE
+        return J
+
+    @staticmethod
+    def cal_target_transform_vec(target, current):
+        """
+        Calculate the displacement vector and axis of rotation from 
+        the current frame to the target frame
+        """
+
+        translate_vec = []
+        rotate_vec = []
+        # YOUR CODE STARTS HERE
+        translate_vec = target[0:3, 3] - current[0:3, 3]
+        
+        R_target = target[0:3, 0:3]
+        R_curr = current[0:3, 0:3]
+        R_err = np.matmul(R_target, R_curr.T)
+        
+        angle = np.arccos(np.clip((np.trace(R_err) - 1.0) / 2.0, -1.0, 1.0))
+        
+        if np.isclose(angle, 0.0):
+            rotate_vec = np.zeros(3)
+        else:
+            r = np.array([R_err[2, 1] - R_err[1, 2],
+                          R_err[0, 2] - R_err[2, 0],
+                          R_err[1, 0] - R_err[0, 1]])
+            rotate_vec = (angle / (2.0 * np.sin(angle))) * r
+        # YOUR CODE ENDS HERE
+
+        return translate_vec, rotate_vec
+
+    def check_joint_constraints(self,q,target):
+        """
+        Check if the given candidate solution respects the joint limits.
+        """
+
+        success = False
+
+        # YOUR CODE STARTS HERE
+        within_limits = np.all(q >= self.lower) and np.all(q <= self.upper)
+        
+        _, T0e = self.fk.forward(q)
+        t_err, r_err = self.cal_target_transform_vec(target, T0e)
+        dist = np.linalg.norm(t_err) + np.linalg.norm(r_err)
+        
+        success = within_limits and (dist < 1e-2)
+        # YOUR CODE ENDS HERE
+
+        return success
+
+
+    @staticmethod
+    def solve_ik(q,target):
+        """
+        Uses the method you prefer to calculate the joint velocity 
+        """
+
+        dq = []
+        # YOUR CODE STARTS HERE
+        _, current_T = IK.fk.forward(q)
+        t_err, r_err = IK.cal_target_transform_vec(target, current_T)
+        e = np.concatenate((t_err, r_err))
+        
+        J = IK.calcJacobian(q)
+        # Small gain alpha for stability
+        gain = 0.01 
+        dq = gain * np.matmul(J.T, e)
+        # YOUR CODE ENDS HERE
+
+        return dq
+
+    def inverse(self, target, initial_guess):
+        """
+        Solve the inverse kinematics of the robot arm
+        """
+
+        q = initial_guess
+        success = False
+
+        # YOUR CODE STARTS HERE
+        q = np.array(initial_guess, dtype=float).flatten()
+        max_iterations = 10000 
+        tolerance = 1e-3 
+
+        for i in range(max_iterations):
+            dq = self.solve_ik(q, target)
+            q = q + dq
+            q = np.clip(q, self.lower, self.upper)
+            
+            _, current_T = self.fk.forward(q)
+            t_e, r_e = self.cal_target_transform_vec(target, current_T)
+            dist = np.linalg.norm(t_e) + np.linalg.norm(r_e)
+            
+            if dist < tolerance:
+                break
+        
+        success = self.check_joint_constraints(q, target)
+        # YOUR CODE ENDS HERE
+
+        return q, success
+
+if __name__ == "__main__":
+    pass
