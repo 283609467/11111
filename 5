@@ -1,0 +1,13 @@
+_, current_T = IK.fk.forward(q)
+        trans_err, rot_err = IK.cal_target_transform_vec(target, current_T)
+        
+        # Combine translation and rotation errors into a 6x1 vector
+        e = np.concatenate((trans_err, rot_err))
+        
+        J = IK.calcJacobian(q)
+        
+        # Jacobian Transpose Method implementation
+        # dq = gain * (J^T * e)
+        # The gain acts as an adaptive step size. Setting it to a moderate value helps stability.
+        gain = 0.5
+        dq = gain * np.matmul(J.T, e)
