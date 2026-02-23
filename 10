@@ -1,0 +1,29 @@
+max_iterations = 5000
+        tolerance = 1e-3
+        q = np.copy(initial_guess)
+        
+        print("\n[INFO] Starting Inverse Kinematics solver...")
+        
+        for i in range(max_iterations):
+            # Calculate required joint updates
+            dq = self.solve_ik(q, target)
+            
+            # Use joint update magnitude to check for convergence
+            error_norm = np.linalg.norm(dq)
+            
+            # Print feedback to terminal periodically
+            if i % 500 == 0:
+                print(f"      -> Iteration {i}, update magnitude: {error_norm:.6f}")
+            
+            # Terminate if the solution has stabilized
+            if error_norm < tolerance:
+                print(f"[SUCCESS] IK solved in {i} iterations.")
+                break
+                
+            # Update configuration and enforce joint limits immediately
+            q = q + dq
+            q = np.clip(q, self.lower, self.upper)
+            
+        success = self.check_joint_constraints(q, target)
+        if not success:
+            print("[WARNING] Max iterations reached or constraints failed.")
