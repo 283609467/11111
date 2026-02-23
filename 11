@@ -1,0 +1,34 @@
+max_iterations = 10000 # Increase iterations because we are using a smaller gain
+        tolerance = 1e-3
+        q = np.copy(initial_guess)
+        
+        print(f"\n[INFO] Starting IK solver with gain=0.01...")
+        
+        for i in range(max_iterations):
+            # 1. Get update
+            dq = self.solve_ik(q, target)
+            
+            # 2. Check actual Cartesian Error (This is what matters to the teacher)
+            _, current_T = self.fk.forward(q)
+            t_err, r_err = self.cal_target_transform_vec(target, current_T)
+            # Combine translation (m) and rotation (rad) error
+            dist_to_target = np.linalg.norm(t_err) + np.linalg.norm(r_err)
+            
+            if i % 1000 == 0:
+                print(f"      -> Iter {i}, Dist to target: {dist_to_target:.6f}")
+            
+            # 3. Terminating condition based on actual distance
+            if dist_to_target < tolerance:
+                print(f"[SUCCESS] Target reached at iteration {i}")
+                break
+                
+            # 4. Update and clip
+            q = q + dq
+            q = np.clip(q, self.lower, self.upper)
+            
+        success = self.check_joint_constraints(q, target)
+        if not success:
+            # Calculate final error to see how close we got
+            _, final_T = self.fk.forward(q)
+            t_e, r_e = self.cal_target_transform_vec(target, final_T)
+            print(f"[WARNING] Failed. Final Dist: {np.linalg.norm(t_e) + np.linalg.norm(r_e):.4f}")
