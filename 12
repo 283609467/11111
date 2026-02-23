@@ -1,0 +1,150 @@
+#!/usr/bin/env python
+import os
+import sys
+import numpy as np
+from solution.solveFK import FK
+
+class IK:
+
+    # JOINT LIMITS (Exactly as per assignment)
+    lower = np.array([-2.8973,-1.7628,-2.8973,-3.0718,-2.8973,-0.0175,-2.8973])
+    upper = np.array([2.8973,1.7628,2.8973,-0.0698,2.8973,3.7525,2.8973])
+
+    fk = FK()
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def calcJacobian(q):
+        """
+        Calculate the Jacobian matrix using the geometric method.
+        Matches the required framework: q -> J
+        """
+        J = np.zeros((6, 7))
+        T = np.eye(4)
+        z_axes = []
+        positions = []
+        
+        # Iteratively calculate the transform for each joint
+        for i in range(7):
+            z_axes.append(T[0:3, 2])
+            positions.append(T[0:3, 3])
+            
+            a, alpha, d = IK.fk.dh_params[i]
+            T_i = IK.fk.build_dh_transform(a, alpha, d, q[i])
+            T = np.matmul(T, T_i)
+            
+        # Get the final End Effector position
+        T_ee = np.matmul(T, IK.fk.build_dh_transform(0, 0, 0, -np.pi/4))
+        p_ee = T_ee[0:3, 3]
+        
+        # Build the 6x7 Jacobian
+        for i in range(7):
+            z = z_axes[i]
+            p = positions[i]
+            J[0:3, i] = np.cross(z, p_ee - p) # Linear
+            J[3:6, i] = z                     # Angular
+            
+        return J
+
+    @staticmethod
+    def cal_target_transform_vec(target, current):
+        """
+        Calculate displacement and rotation error.
+        Matches the required framework.
+        """
+        translate_vec = target[0:3, 3] - current[0:3, 3]
+        
+        R_target = target[0:3, 0:3]
+        R_curr = current[0:3, 0:3]
+        R_err = np.matmul(R_target, R_curr.T)
+        
+        # Axis-Angle representation for rotation error
+        angle = np.arccos(np.clip((np.trace(R_err) - 1.0) / 2.0, -1.0, 1.0))
+        
+        if np.isclose(angle, 0.0):
+            rotate_vec = np.zeros(3)
+        else:
+            r = np.array([R_err[2, 1] - R_err[1, 2],
+                          R_err[0, 2] - R_err[2, 0],
+                          R_err[1, 0] - R_err[0, 1]])
+            rotate_vec = (angle / (2.0 * np.sin(angle))) * r
+            
+        return translate_vec, rotate_vec
+
+    def check_joint_constraints(self, q, target):
+        """
+        Check joint limits and distance to target.
+        Matches the required framework.
+        """
+        within_limits = np.all(q >= self.lower) and np.all(q <= self.upper)
+        
+        _, T0e = self.fk.forward(q)
+        t_err, r_err = self.cal_target_transform_vec(target, T0e)
+        dist = np.linalg.norm(t_err) + np.linalg.norm(r_err)
+        
+        # Success if within limits and accuracy is within 0.01
+        return within_limits and (dist < 1e-2)
+
+    @staticmethod
+    def solve_ik(q, target):
+        """
+        Jacobian Transpose Method: dq = gain * J^T * error
+        Decays to zero as error approaches zero.
+        """
+        _, current_T = IK.fk.forward(q)
+        t_err, r_err = IK.cal_target_transform_vec(target, current_T)
+        e = np.concatenate((t_err, r_err))
+        
+        J = IK.calcJacobian(q)
+        
+        # Small gain to ensure convergence stability
+        gain = 0.01 
+        dq = gain * np.matmul(J.T, e)
+        return dq
+
+    def inverse(self, target, initial_guess):
+        """
+        Iterative solver loop using the Jacobian Transpose.
+        Matches the required framework.
+        """
+        # Fix for TypeError: ensure q is a float array
+        q = np.array(initial_guess, dtype=float).flatten()
+        success = False
+        max_iterations = 10000 
+        tolerance = 1e-3 
+
+        print(f"\n[INFO] Running IK Solver (Gain=0.01, MaxIter={max_iterations})")
+
+        for i in range(max_iterations):
+            # 1. Get joint velocity
+            dq = self.solve_ik(q, target)
+            
+            # 2. Update joint angles
+            q = q + dq
+            
+            # 3. Apply joint limits (np.clip)
+            q = np.clip(q, self.lower, self.upper)
+            
+            # 4. Check real Cartesian distance for termination
+            _, current_T = self.fk.forward(q)
+            t_e, r_e = self.cal_target_transform_vec(target, current_T)
+            dist = np.linalg.norm(t_e) + np.linalg.norm(r_e)
+            
+            if i % 1000 == 0:
+                print(f"      -> Iteration {i}, Dist to target: {dist:.6f}")
+            
+            if dist < tolerance:
+                print(f"[SUCCESS] Converged at iteration {i}")
+                break
+        
+        # Final success check
+        success = self.check_joint_constraints(q, target)
+        if not success:
+            print("[WARNING] Constraints failed or accuracy not met.")
+            
+        return q, success
+
+if __name__ == "__main__":
+    pass
