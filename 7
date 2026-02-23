@@ -1,0 +1,38 @@
+x, y, z = translation
+        roll, pitch, yaw = orientation
+        
+        # Calculate sine and cosine of Euler angles
+        cx, sx = np.cos(roll), np.sin(roll)
+        cy, sy = np.cos(pitch), np.sin(pitch)
+        cz, sz = np.cos(yaw), np.sin(yaw)
+        
+        # Rotation matrix around X-axis (Roll)
+        Rx = np.array([
+            [1.0, 0.0, 0.0],
+            [0.0,  cx, -sx],
+            [0.0,  sx,  cx]
+        ])
+        
+        # Rotation matrix around Y-axis (Pitch)
+        Ry = np.array([
+            [ cy, 0.0,  sy],
+            [0.0, 1.0, 0.0],
+            [-sy, 0.0,  cy]
+        ])
+        
+        # Rotation matrix around Z-axis (Yaw)
+        Rz = np.array([
+            [ cz, -sz, 0.0],
+            [ sz,  cz, 0.0],
+            [0.0, 0.0, 1.0]
+        ])
+        
+        # Combined rotation matrix: R = Rz * Ry * Rx
+        R = np.matmul(Rz, np.matmul(Ry, Rx))
+        
+        # Construct the 4x4 homogeneous transformation matrix
+        T = np.eye(4)
+        T[0:3, 0:3] = R
+        T[0:3, 3] = translation
+        
+        return T
