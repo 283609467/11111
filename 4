@@ -1,0 +1,10 @@
+# Check Condition 1: Joint Limits
+        within_limits = np.all(q >= self.lower) and np.all(q <= self.upper)
+        
+        # Check Condition 2: Target reachability (Tolerance check)
+        _, T0e = self.fk.forward(q)
+        trans_err, rot_err = self.cal_target_transform_vec(target, T0e)
+        error_norm = np.linalg.norm(trans_err) + np.linalg.norm(rot_err)
+        
+        # Let's define success as being within limits AND having an error smaller than 1e-2
+        success = within_limits and (error_norm < 1e-2)
