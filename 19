@@ -1,0 +1,29 @@
+q = np.array(initial_guess, dtype=float).flatten()
+        max_iterations = 10000 
+        tolerance = 1e-3 
+
+        q_path = [] 
+
+        print(f"\n[INFO] Starting IK Solver (Gain=0.01, MaxIter={max_iterations})")
+
+        for i in range(max_iterations):
+            dq = self.solve_ik(q, target)
+            q = q + dq
+            q = np.clip(q, self.lower, self.upper)
+            
+            if i % 50 == 0:
+                q_path.append(q.copy())
+            
+            _, current_T = self.fk.forward(q)
+            t_e, r_e = self.cal_target_transform_vec(target, current_T)
+            dist = np.linalg.norm(t_e) + np.linalg.norm(r_e)
+            
+            if dist < tolerance:
+                print(f"[SUCCESS] Target reached at iteration {i}")
+                break
+        
+        q_path.append(q.copy())
+        
+        success = self.check_joint_constraints(q, target)
+        
+        q_out = np.array(q_path)
