@@ -36,7 +36,7 @@ class TrajGenerator:
             gears[0] = 1
             stations[0] = 0.0
             for i in range(1, len(path)):
-                gears[i] = 1  # Lattice规划器默认前进
+                gears[i] = 1  
                 stations[i] = stations[i-1] + self.distance(path[i-1], path[i])
         # YOUR CODE ENDS HERE
 
